@@ -61,6 +61,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const canvasAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 export default function App() {
   const [projetos, setProjetos] = useState([]);
@@ -73,18 +74,35 @@ export default function App() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   
-  // O código de acesso (num cenário real, estaria no backend. Aqui mantemos simples)
+  // O código de acesso
   const PIN_CORRETO = '9999';
 
   // Filtros para a diretoria
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('Todos');
 
-  // 1. Inicializa Autenticação no Banco de Dados (Modo Anónimo)
+  // Funções dinâmicas para alternar os caminhos da base de dados consoante o ambiente
+  const getProjetosCollection = (uid) => {
+    return isSandbox
+      ? collection(db, 'artifacts', canvasAppId, 'users', uid, 'projetos')
+      : collection(db, 'projetos');
+  };
+
+  const getProjetoDoc = (uid, id) => {
+    return isSandbox
+      ? doc(db, 'artifacts', canvasAppId, 'users', uid, 'projetos', id)
+      : doc(db, 'projetos', id);
+  };
+
+  // 1. Inicializa Autenticação no Banco de Dados
   useEffect(() => {
     const initAuth = async () => {
       try {
-        await signInAnonymously(auth);
+        if (isSandbox && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
       } catch (error) {
         console.error("Erro na autenticação:", error);
       }
@@ -99,16 +117,21 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     
-    // Caminho simplificado para o seu próprio Firebase: coleção 'projetos'
-    const projetosRef = collection(db, 'projetos');
+    const projetosRef = getProjetosCollection(user.uid);
     const unsubscribe = onSnapshot(projetosRef, (snapshot) => {
       const projetosData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       
-      // Ordena pelos mais recentes criados
-      projetosData.sort((a, b) => b.createdAt - a.createdAt);
+      // Ordena pelos projetos com base no campo 'ordem'. 
+      // Se não existir, usa a data de criação como fallback.
+      projetosData.sort((a, b) => {
+        const ordemA = a.ordem !== undefined ? a.ordem : a.createdAt;
+        const ordemB = b.ordem !== undefined ? b.ordem : b.createdAt;
+        return ordemA - ordemB;
+      });
+      
       setProjetos(projetosData);
       setLoading(false);
     }, (error) => {
@@ -141,13 +164,19 @@ export default function App() {
     e.preventDefault();
     if (!formData.nome || !formData.cargaHoraria || !formData.responsavel || !user) return;
 
+    // Calcula a nova ordem para ficar no final da lista
+    const novaOrdem = projetos.length > 0 
+      ? Math.max(...projetos.map(p => p.ordem !== undefined ? p.ordem : 0)) + 1 
+      : 0;
+
     const novoProjeto = {
       ...formData,
-      createdAt: Date.now() // Timestamp para ordenação
+      createdAt: Date.now(),
+      ordem: novaOrdem
     };
 
     try {
-      await addDoc(collection(db, 'projetos'), novoProjeto);
+      await addDoc(getProjetosCollection(user.uid), novoProjeto);
       
       // Limpa o formulário
       setFormData({
@@ -168,27 +197,56 @@ export default function App() {
   const handleDelete = async (id) => {
     if (!user) return;
     try {
-      await deleteDoc(doc(db, 'projetos', id));
+      await deleteDoc(getProjetoDoc(user.uid, id));
     } catch (error) {
       console.error("Erro ao deletar projeto:", error);
     }
   };
 
-  // Atualiza um campo específico do projeto (Status/Responsável) no banco
+  // Atualiza um campo específico
   const handleUpdateProjeto = async (id, campo, valor) => {
     if (!user) return;
     
-    // Atualização Otimista na Interface (opcional, deixa mais rápido)
     setProjetos(projetos.map(projeto => 
       projeto.id === id ? { ...projeto, [campo]: valor } : projeto
     ));
 
     try {
-      await updateDoc(doc(db, 'projetos', id), {
+      await updateDoc(getProjetoDoc(user.uid, id), {
         [campo]: valor
       });
     } catch (error) {
       console.error("Erro ao atualizar projeto:", error);
+    }
+  };
+
+  // Função para reordenar os itens (Para Cima ou Para Baixo)
+  const handleMoverOrdem = async (index, direcao) => {
+    if (!user) return;
+
+    const targetIndex = direcao === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= projetos.length) return;
+
+    const projetoAtual = projetos[index];
+    const projetoAlvo = projetos[targetIndex];
+
+    // Garante que ambos têm um valor de ordem válido
+    const ordemAtual = projetoAtual.ordem !== undefined ? projetoAtual.ordem : index;
+    const ordemAlvo = projetoAlvo.ordem !== undefined ? projetoAlvo.ordem : targetIndex;
+
+    // Atualização otimista na interface
+    const novosProjetos = [...projetos];
+    novosProjetos[index] = { ...projetoAtual, ordem: ordemAlvo };
+    novosProjetos[targetIndex] = { ...projetoAlvo, ordem: ordemAtual };
+    novosProjetos.sort((a, b) => a.ordem - b.ordem);
+    setProjetos(novosProjetos);
+
+    // Salvar no Firebase
+    try {
+      await updateDoc(getProjetoDoc(user.uid, projetoAtual.id), { ordem: ordemAlvo });
+      await updateDoc(getProjetoDoc(user.uid, projetoAlvo.id), { ordem: ordemAtual });
+    } catch (error) {
+      console.error("Erro ao reordenar:", error);
     }
   };
 
@@ -203,6 +261,8 @@ export default function App() {
   const projetosPublicados = projetos.filter(p => p.status === 'Publicado').length;
   const projetosEmAndamento = totalProjetos - projetosPublicados;
 
+  const isFiltrando = busca !== '' || filtroStatus !== 'Todos';
+
   // Filtra os projetos para exibição
   const projetosFiltrados = projetos.filter(p => {
     const matchBusca = p.nome.toLowerCase().includes(busca.toLowerCase()) || 
@@ -211,7 +271,6 @@ export default function App() {
     return matchBusca && matchStatus;
   });
 
-  // Função para validar o PIN
   const handleUnlock = (e) => {
     e.preventDefault();
     if (pinInput === PIN_CORRETO) {
@@ -226,18 +285,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
-      {/* Header */}
       <header className="bg-indigo-600 text-white shadow-md py-6 px-8 relative z-10">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <LayoutDashboard className="w-8 h-8 text-indigo-200" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Produtora IMPACTA</h1>
-              <p className="text-indigo-200 text-sm">Gerenciamento de Produção de conteúdos</p>
+              <h1 className="text-2xl font-bold tracking-tight">Painel de Conteúdo Educacional</h1>
+              <p className="text-indigo-200 text-sm">Gerenciamento de Produção de Cursos Livres</p>
             </div>
           </div>
           
-          {/* Botão de Travar/Destravar */}
           <button
             onClick={() => isAdmin ? setIsAdmin(false) : setShowPinModal(true)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
@@ -326,7 +383,6 @@ export default function App() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                  {/* Nome do Conteúdo */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Conteúdo</label>
                     <div className="relative">
@@ -345,7 +401,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Tipo de Conteúdo */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Conteúdo</label>
                     <select
@@ -360,7 +415,6 @@ export default function App() {
                     </select>
                   </div>
 
-                  {/* Carga Horária */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Carga Horária</label>
                     <div className="relative">
@@ -379,7 +433,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Status Atual */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Status Atual</label>
                     <select
@@ -394,7 +447,6 @@ export default function App() {
                     </select>
                   </div>
 
-                  {/* Responsável Atual */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Responsável Atual</label>
                     <div className="relative">
@@ -413,7 +465,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Data de Entrega */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Previsão de Entrega</label>
                     <div className="relative">
@@ -430,7 +481,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Comentários */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Comentários</label>
                     <div className="relative">
@@ -473,7 +523,7 @@ export default function App() {
                     </div>
                     <input
                       type="text"
-                      placeholder="Buscar conteúdo ou pessoa..."
+                      placeholder="Buscar conteúdo..."
                       value={busca}
                       onChange={(e) => setBusca(e.target.value)}
                       className="block w-full sm:w-64 pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500"
@@ -526,7 +576,7 @@ export default function App() {
                         </td>
                       </tr>
                     ) : (
-                      projetosFiltrados.map((projeto) => (
+                      projetosFiltrados.map((projeto, index) => (
                         <tr key={projeto.id} className="hover:bg-slate-50 transition-colors">
                           <td className="px-6 py-4">
                             <div className="flex flex-col">
@@ -632,13 +682,36 @@ export default function App() {
                           </td>
                           {isAdmin && (
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button 
-                                onClick={() => handleDelete(projeto.id)}
-                                className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
-                                title="Excluir projeto"
-                              >
-                                <Trash2 className="w-5 h-5" />
-                              </button>
+                              <div className="flex items-center justify-end gap-1">
+                                {!isFiltrando && (
+                                  <div className="flex flex-col mr-2 bg-slate-50 rounded border border-slate-200">
+                                    <button
+                                      onClick={() => handleMoverOrdem(index, 'up')}
+                                      disabled={index === 0}
+                                      className={`p-0.5 ${index === 0 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-200'}`}
+                                      title="Mover para cima"
+                                    >
+                                      <ChevronUp className="w-4 h-4" />
+                                    </button>
+                                    <div className="h-px w-full bg-slate-200"></div>
+                                    <button
+                                      onClick={() => handleMoverOrdem(index, 'down')}
+                                      disabled={index === projetos.length - 1}
+                                      className={`p-0.5 ${index === projetos.length - 1 ? 'text-slate-300 cursor-not-allowed' : 'text-slate-500 hover:text-indigo-600 hover:bg-slate-200'}`}
+                                      title="Mover para baixo"
+                                    >
+                                      <ChevronDown className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                                <button 
+                                  onClick={() => handleDelete(projeto.id)}
+                                  className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
+                                  title="Excluir projeto"
+                                >
+                                  <Trash2 className="w-5 h-5" />
+                                </button>
+                              </div>
                             </td>
                           )}
                         </tr>
