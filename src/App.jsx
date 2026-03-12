@@ -232,8 +232,8 @@ export default function App() {
           <div className="flex items-center gap-3">
             <LayoutDashboard className="w-8 h-8 text-indigo-200" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Painel de Conteúdo Educacional</h1>
-              <p className="text-indigo-200 text-sm">Gerenciamento de Produção de Cursos Livres</p>
+              <h1 className="text-2xl font-bold tracking-tight">Produtora IMPACTA</h1>
+              <p className="text-indigo-200 text-sm">Gerenciamento de Produção de conteúdos</p>
             </div>
           </div>
           
