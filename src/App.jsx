@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { 
   BookOpen, 
@@ -47,28 +47,20 @@ const TIPO_OPCOES = [
   'Vídeo de marketing'
 ];
 
-// Configuração do Firebase
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// Configuração do Firebase para Produção (Vercel)
+// Substitua os valores abaixo pelas suas chaves restantes do Firebase
 const firebaseConfig = {
-
   apiKey: "AIzaSyDbe81rhQ0XoEHdzub2lnfe-B6x42LtQEw",
-
   authDomain: "impacta-ed875.firebaseapp.com",
-
   projectId: "impacta-ed875",
-
   storageBucket: "impacta-ed875.firebasestorage.app",
-
   messagingSenderId: "311469756126",
-
-  appId: "1:311469756126:web:73f321d95458c7720f7c4f",
-
-  measurementId: "G-ET6YPRY0Y1"
-
+  appId: "1:311469756126:web:73f321d95458c7720f7c4f"
 };
+
+const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 export default function App() {
   const [projetos, setProjetos] = useState([]);
@@ -88,15 +80,11 @@ export default function App() {
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('Todos');
 
-  // 1. Inicializa Autenticação no Banco de Dados
+  // 1. Inicializa Autenticação no Banco de Dados (Modo Anónimo)
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch (error) {
         console.error("Erro na autenticação:", error);
       }
@@ -111,7 +99,8 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     
-    const projetosRef = collection(db, 'artifacts', appId, 'users', user.uid, 'projetos');
+    // Caminho simplificado para o seu próprio Firebase: coleção 'projetos'
+    const projetosRef = collection(db, 'projetos');
     const unsubscribe = onSnapshot(projetosRef, (snapshot) => {
       const projetosData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -158,7 +147,7 @@ export default function App() {
     };
 
     try {
-      await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'projetos'), novoProjeto);
+      await addDoc(collection(db, 'projetos'), novoProjeto);
       
       // Limpa o formulário
       setFormData({
@@ -179,7 +168,7 @@ export default function App() {
   const handleDelete = async (id) => {
     if (!user) return;
     try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'projetos', id));
+      await deleteDoc(doc(db, 'projetos', id));
     } catch (error) {
       console.error("Erro ao deletar projeto:", error);
     }
@@ -195,7 +184,7 @@ export default function App() {
     ));
 
     try {
-      await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'projetos', id), {
+      await updateDoc(doc(db, 'projetos', id), {
         [campo]: valor
       });
     } catch (error) {
