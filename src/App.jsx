@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { 
   BookOpen, 
@@ -19,7 +19,10 @@ import {
   Calendar,
   Lock,
   Unlock,
-  Key
+  Key,
+  ChevronUp,
+  ChevronDown,
+  AlertTriangle
 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
@@ -67,6 +70,9 @@ export default function App() {
   const [projetos, setProjetos] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // Novo estado para capturar e mostrar erros de conexão com o Firebase
+  const [erroFirebase, setErroFirebase] = useState(null);
 
   // Estados de Segurança (Modo Visualização vs Edição)
   const [isAdmin, setIsAdmin] = useState(false);
@@ -98,6 +104,7 @@ export default function App() {
   useEffect(() => {
     const initAuth = async () => {
       try {
+        setErroFirebase(null);
         if (isSandbox && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
@@ -105,6 +112,9 @@ export default function App() {
         }
       } catch (error) {
         console.error("Erro na autenticação:", error);
+        // Captura o erro em vez de ficar em carregamento infinito
+        setErroFirebase(error.message);
+        setLoading(false);
       }
     };
     initAuth();
@@ -136,6 +146,7 @@ export default function App() {
       setLoading(false);
     }, (error) => {
       console.error("Erro ao buscar dados:", error);
+      setErroFirebase("Erro ao buscar projetos. Verifique as regras do Firestore.");
       setLoading(false);
     });
 
@@ -190,6 +201,7 @@ export default function App() {
       });
     } catch (error) {
       console.error("Erro ao adicionar projeto:", error);
+      alert("Erro ao adicionar: " + error.message);
     }
   };
 
@@ -565,6 +577,25 @@ export default function App() {
                         <td colSpan="4" className="px-6 py-12 text-center text-slate-500 flex flex-col items-center justify-center">
                           <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
                           Carregando painel...
+                        </td>
+                      </tr>
+                    ) : erroFirebase ? (
+                      <tr>
+                        <td colSpan="4" className="px-6 py-12">
+                          <div className="flex flex-col items-center justify-center text-center">
+                            <div className="bg-red-50 p-6 rounded-xl border border-red-200 max-w-lg">
+                              <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+                              <h3 className="text-lg font-bold text-red-800 mb-2">Erro de Ligação ao Firebase</h3>
+                              <p className="text-sm text-red-600 mb-4 bg-red-100 p-2 rounded font-mono">{erroFirebase}</p>
+                              <div className="text-sm text-red-700 text-left bg-white/50 p-4 rounded-lg">
+                                <p className="font-semibold mb-2">Como corrigir este erro no código:</p>
+                                <ol className="list-decimal pl-4 space-y-2">
+                                  <li>Certifique-se de que substituiu as palavras <b>"SUA_API_KEY_AQUI"</b>, etc., pelas chaves verdadeiras do seu projeto Firebase.</li>
+                                  <li>Verifique se ativou a <b>Autenticação Anônima</b> na secção <i>Authentication</i> do Firebase Console.</li>
+                                </ol>
+                              </div>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     ) : projetosFiltrados.length === 0 ? (
