@@ -50,8 +50,8 @@ const TIPO_OPCOES = [
   'Vídeo de marketing'
 ];
 
-// Configuração do Firebase para Produção (Vercel)
-// Substitua os valores abaixo pelas suas chaves restantes do Firebase
+// Configuração para Produção (Vercel)
+// Substitua os valores abaixo pelas suas chaves verdadeiras do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDbe81rhQ0XoEHdzub2lnfe-B6x42LtQEw",
   authDomain: "impacta-ed875.firebaseapp.com",
@@ -64,7 +64,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const canvasAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 export default function App() {
   const [projetos, setProjetos] = useState([]);
@@ -87,29 +86,12 @@ export default function App() {
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('Todos');
 
-  // Funções dinâmicas para alternar os caminhos da base de dados consoante o ambiente
-  const getProjetosCollection = (uid) => {
-    return isSandbox
-      ? collection(db, 'artifacts', canvasAppId, 'users', uid, 'projetos')
-      : collection(db, 'projetos');
-  };
-
-  const getProjetoDoc = (uid, id) => {
-    return isSandbox
-      ? doc(db, 'artifacts', canvasAppId, 'users', uid, 'projetos', id)
-      : doc(db, 'projetos', id);
-  };
-
   // 1. Inicializa Autenticação no Banco de Dados
   useEffect(() => {
     const initAuth = async () => {
       try {
         setErroFirebase(null);
-        if (isSandbox && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch (error) {
         console.error("Erro na autenticação:", error);
         // Captura o erro em vez de ficar em carregamento infinito
@@ -127,7 +109,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     
-    const projetosRef = getProjetosCollection(user.uid);
+    const projetosRef = collection(db, 'projetos');
     const unsubscribe = onSnapshot(projetosRef, (snapshot) => {
       const projetosData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -187,7 +169,7 @@ export default function App() {
     };
 
     try {
-      await addDoc(getProjetosCollection(user.uid), novoProjeto);
+      await addDoc(collection(db, 'projetos'), novoProjeto);
       
       // Limpa o formulário
       setFormData({
@@ -209,7 +191,7 @@ export default function App() {
   const handleDelete = async (id) => {
     if (!user) return;
     try {
-      await deleteDoc(getProjetoDoc(user.uid, id));
+      await deleteDoc(doc(db, 'projetos', id));
     } catch (error) {
       console.error("Erro ao deletar projeto:", error);
     }
@@ -224,7 +206,7 @@ export default function App() {
     ));
 
     try {
-      await updateDoc(getProjetoDoc(user.uid, id), {
+      await updateDoc(doc(db, 'projetos', id), {
         [campo]: valor
       });
     } catch (error) {
@@ -255,8 +237,8 @@ export default function App() {
 
     // Salvar no Firebase
     try {
-      await updateDoc(getProjetoDoc(user.uid, projetoAtual.id), { ordem: ordemAlvo });
-      await updateDoc(getProjetoDoc(user.uid, projetoAlvo.id), { ordem: ordemAtual });
+      await updateDoc(doc(db, 'projetos', projetoAtual.id), { ordem: ordemAlvo });
+      await updateDoc(doc(db, 'projetos', projetoAlvo.id), { ordem: ordemAtual });
     } catch (error) {
       console.error("Erro ao reordenar:", error);
     }
