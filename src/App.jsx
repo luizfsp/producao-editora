@@ -31,7 +31,7 @@ const STATUS_OPTIONS = [
   { value: 'Gravação', label: 'Gravação', icon: Video, color: 'bg-red-100 text-red-700 border-red-300' },
   { value: 'Edição', label: 'Edição', icon: Clock, color: 'bg-purple-100 text-purple-700 border-purple-300' },
   { value: 'Revisão', label: 'Revisão', icon: MessageCircle, color: 'bg-orange-100 text-orange-700 border-orange-300' },
-  { value: 'Publicado', label: 'Publicado', icon: CheckCircle, color: 'bg-green-100 text-green-700 border-green-300' }
+  { value: 'Concluído', label: 'Concluído', icon: CheckCircle, color: 'bg-green-100 text-green-700 border-green-300' }
 ];
 
 const STATUS_PROGRESS = {
@@ -40,7 +40,7 @@ const STATUS_PROGRESS = {
   'Gravação': 50,
   'Edição': 75,
   'Revisão': 90,
-  'Publicado': 100
+  'Concluído': 100
 };
 
 const TIPO_OPCOES = [
@@ -252,7 +252,7 @@ export default function App() {
 
   // Calcula estatísticas
   const totalProjetos = projetos.length;
-  const projetosPublicados = projetos.filter(p => p.status === 'Publicado').length;
+  const projetosPublicados = projetos.filter(p => p.status === 'Concluído').length;
   const projetosEmAndamento = totalProjetos - projetosPublicados;
 
   const isFiltrando = busca !== '' || filtroStatus !== 'Todos';
@@ -341,7 +341,7 @@ export default function App() {
               <CheckCircle className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Publicados</p>
+              <p className="text-sm font-medium text-slate-500">Concluídos</p>
               <p className="text-2xl font-bold text-slate-800">{projetosPublicados}</p>
             </div>
           </div>
