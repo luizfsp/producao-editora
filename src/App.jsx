@@ -21,36 +21,38 @@ import {
   Unlock,
   Key,
   GripVertical,
-  AlertTriangle
+  AlertTriangle,
+  Archive,
+  RotateCcw
 } from 'lucide-react';
 
 const STATUS_OPTIONS = [
-  { value: 'Planning', label: 'Planning', icon: FileText, color: 'bg-slate-100 text-slate-700 border-slate-300' },
-  { value: 'Scripting', label: 'Scripting', icon: PenTool, color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
-  { value: 'Recording', label: 'Recording', icon: Video, color: 'bg-red-100 text-red-700 border-red-300' },
-  { value: 'Editing', label: 'Editing', icon: Clock, color: 'bg-purple-100 text-purple-700 border-purple-300' },
-  { value: 'Review', label: 'Review', icon: MessageCircle, color: 'bg-orange-100 text-orange-700 border-orange-300' },
-  { value: 'Completed', label: 'Completed', icon: CheckCircle, color: 'bg-green-100 text-green-700 border-green-300' }
+  { value: 'Planejamento', label: 'Planejamento', icon: FileText, color: 'bg-slate-100 text-slate-700 border-slate-300' },
+  { value: 'Roteirização', label: 'Roteirização', icon: PenTool, color: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
+  { value: 'Gravação', label: 'Gravação', icon: Video, color: 'bg-red-100 text-red-700 border-red-300' },
+  { value: 'Edição', label: 'Edição', icon: Clock, color: 'bg-purple-100 text-purple-700 border-purple-300' },
+  { value: 'Revisão', label: 'Revisão', icon: MessageCircle, color: 'bg-orange-100 text-orange-700 border-orange-300' },
+  { value: 'Concluído', label: 'Concluído', icon: CheckCircle, color: 'bg-green-100 text-green-700 border-green-300' }
 ];
 
 const STATUS_PROGRESS = {
-  'Planning': 15,
-  'Scripting': 30,
-  'Recording': 50,
-  'Editing': 75,
-  'Review': 90,
-  'Completed': 100
+  'Planejamento': 15,
+  'Roteirização': 30,
+  'Gravação': 50,
+  'Edição': 75,
+  'Revisão': 90,
+  'Concluído': 100
 };
 
 const CONTENT_TYPES = [
-  'Course',
+  'Curso',
   'Live',
-  'Event',
-  'Marketing Video'
+  'Evento',
+  'Vídeo de marketing'
 ];
 
-// Production Configuration (Vercel)
-// Replace the values below with your real Firebase project keys
+// Configuração para Produção (Vercel)
+// Substitua os valores abaixo pelas suas chaves verdadeiras do Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyDbe81rhQ0XoEHdzub2lnfe-B6x42LtQEw",
   authDomain: "impacta-ed875.firebaseapp.com",
@@ -69,34 +71,37 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   
-  // State to capture and display Firebase connection errors
+  // Estado para capturar e mostrar erros de conexão com o Firebase
   const [firebaseError, setFirebaseError] = useState(null);
 
-  // Security States (View-Only vs Editing Mode)
+  // Estados de Segurança (Modo Visualização vs Edição)
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // Drag and Drop States
+  // Estados do Drag and Drop (Arrastar e Soltar)
   const [draggedItemIndex, setDraggedItemIndex] = useState(null);
   const [dragOverItemIndex, setDragOverItemIndex] = useState(null);
   
-  // Access code
+  // Estado de Arquivamento
+  const [showArchived, setShowArchived] = useState(false);
+
+  // Código de acesso
   const CORRECT_PIN = '9999';
 
-  // Filters for the dashboard
+  // Filtros para o painel
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('Todos');
 
-  // 1. Initialize Database Authentication
+  // 1. Inicializa Autenticação no Banco de Dados
   useEffect(() => {
     const initAuth = async () => {
       try {
         setFirebaseError(null);
         await signInAnonymously(auth);
       } catch (error) {
-        console.error("Authentication error:", error);
+        console.error("Erro na autenticação:", error);
         setFirebaseError(error.message);
         setLoading(false);
       }
@@ -107,7 +112,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Fetch and listen to real-time Firestore data
+  // 2. Busca e escuta os dados no Firestore em tempo real
   useEffect(() => {
     if (!user) return;
     
@@ -118,8 +123,8 @@ export default function App() {
         ...doc.data()
       }));
       
-      // Sort projects based on the 'ordem' field. 
-      // If it doesn't exist, use the creation date as a fallback.
+      // Ordena pelos projetos com base no campo 'ordem'. 
+      // Se não existir, usa a data de criação como fallback.
       projectsData.sort((a, b) => {
         const orderA = a.ordem !== undefined ? a.ordem : a.createdAt;
         const orderB = b.ordem !== undefined ? b.ordem : b.createdAt;
@@ -129,37 +134,37 @@ export default function App() {
       setProjects(projectsData);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching data:", error);
-      setFirebaseError("Error fetching projects. Check Firestore security rules.");
+      console.error("Erro ao buscar dados:", error);
+      setFirebaseError("Erro ao buscar projetos. Verifique as regras do Firestore.");
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [user]);
 
-  // Form State
+  // Estado do formulário
   const [formData, setFormData] = useState({
     nome: '',
-    tipoConteudo: 'Course',
+    tipoConteudo: 'Curso',
     cargaHoraria: '',
-    status: 'Planning',
+    status: 'Planejamento',
     responsavel: '',
     comentarios: '',
     dataEntrega: ''
   });
 
-  // Update form data
+  // Atualiza os dados do formulário
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Add a new project to the database
+  // Adiciona um novo projeto no banco de dados
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.nome || !formData.cargaHoraria || !formData.responsavel || !user) return;
 
-    // Calculate new order to place it at the end of the list
+    // Calcula a nova ordem para ficar no final da lista
     const newOrder = projects.length > 0 
       ? Math.max(...projects.map(p => p.ordem !== undefined ? p.ordem : 0)) + 1 
       : 0;
@@ -167,39 +172,40 @@ export default function App() {
     const newProject = {
       ...formData,
       createdAt: Date.now(),
-      ordem: newOrder
+      ordem: newOrder,
+      arquivado: false
     };
 
     try {
       await addDoc(collection(db, 'projetos'), newProject);
       
-      // Clear form
+      // Limpa o formulário
       setFormData({
         nome: '',
-        tipoConteudo: 'Course',
+        tipoConteudo: 'Curso',
         cargaHoraria: '',
-        status: 'Planning',
+        status: 'Planejamento',
         responsavel: '',
         comentarios: '',
         dataEntrega: ''
       });
     } catch (error) {
-      console.error("Error adding project:", error);
-      alert("Error adding project: " + error.message);
+      console.error("Erro ao adicionar projeto:", error);
+      alert("Erro ao adicionar: " + error.message);
     }
   };
 
-  // Remove a project from the database
+  // Remove um projeto do banco de dados (Permanentemente)
   const handleDelete = async (id) => {
     if (!user) return;
     try {
       await deleteDoc(doc(db, 'projetos', id));
     } catch (error) {
-      console.error("Error deleting project:", error);
+      console.error("Erro ao deletar projeto:", error);
     }
   };
 
-  // Update a specific field
+  // Atualiza um campo específico
   const handleUpdateProject = async (id, field, value) => {
     if (!user) return;
     
@@ -212,69 +218,81 @@ export default function App() {
         [field]: value
       });
     } catch (error) {
-      console.error("Error updating project:", error);
+      console.error("Erro ao atualizar projeto:", error);
     }
   };
 
-  // --- Drag and Drop Handlers ---
+  // --- Funções de Arrastar e Soltar (Drag and Drop) ---
   const handleDrop = async (e, targetIndex) => {
     e.preventDefault();
-    if (draggedItemIndex === null || draggedItemIndex === targetIndex) {
+    // Não permite reordenar na visualização de arquivados
+    if (showArchived || draggedItemIndex === null || draggedItemIndex === targetIndex) {
       setDraggedItemIndex(null);
       setDragOverItemIndex(null);
       return;
     }
 
-    const newProjects = [...projects];
+    const newProjects = [...filteredProjects];
     const draggedItem = newProjects[draggedItemIndex];
 
-    // Rearrange the array
+    // Reorganiza o array
     newProjects.splice(draggedItemIndex, 1);
     newProjects.splice(targetIndex, 0, draggedItem);
 
-    // Recalculate 'ordem' field for all elements to ensure consistency
-    const updatedProjects = newProjects.map((proj, idx) => ({
-      ...proj,
-      ordem: idx
-    }));
-
+    // Atualiza o estado para refletir as mudanças instantaneamente
+    const updatedProjects = [...projects];
+    
+    // Gera as novas ordens
+    newProjects.forEach((proj, idx) => {
+      const projectToUpdate = updatedProjects.find(p => p.id === proj.id);
+      if (projectToUpdate) {
+        projectToUpdate.ordem = idx;
+      }
+    });
+    
+    updatedProjects.sort((a, b) => a.ordem - b.ordem);
     setProjects(updatedProjects);
     setDraggedItemIndex(null);
     setDragOverItemIndex(null);
 
-    // Save batch updates to Firebase
+    // Salva as atualizações em lote no Firebase
     try {
-      const updatePromises = updatedProjects.map(proj => {
-        // Only trigger an update if the order actually changed for this item
-        if (projects.find(p => p.id === proj.id)?.ordem !== proj.ordem) {
-          return updateDoc(doc(db, 'projetos', proj.id), { ordem: proj.ordem });
+      const updatePromises = newProjects.map((proj, idx) => {
+        // Só dispara a atualização se a ordem realmente mudou para este item
+        const originalProj = projects.find(p => p.id === proj.id);
+        if (originalProj && originalProj.ordem !== idx) {
+          return updateDoc(doc(db, 'projetos', proj.id), { ordem: idx });
         }
         return Promise.resolve();
       });
       await Promise.all(updatePromises);
     } catch (error) {
-      console.error("Error saving new order:", error);
+      console.error("Erro ao salvar nova ordem:", error);
     }
   };
 
-  // Helper function to get status colors
+  // Função auxiliar para buscar a cor do status
   const getStatusColor = (statusName) => {
     const statusObj = STATUS_OPTIONS.find(s => s.value === statusName);
     return statusObj ? statusObj.color : 'bg-gray-100 text-gray-700 border-gray-300';
   };
 
-  // Calculate statistics
-  const totalProjects = projects.length;
-  const publishedProjects = projects.filter(p => p.status === 'Completed').length;
+  // Calcula estatísticas (Apenas para projetos Ativos)
+  const activeProjectsList = projects.filter(p => !p.arquivado);
+  const totalProjects = activeProjectsList.length;
+  const publishedProjects = activeProjectsList.filter(p => p.status === 'Concluído').length;
   const inProgressProjects = totalProjects - publishedProjects;
 
-  const isFiltering = searchQuery !== '' || statusFilter !== 'All';
+  const isFiltering = searchQuery !== '' || statusFilter !== 'Todos';
 
-  // Filter projects for display
+  // Filtra os projetos para exibição (Ativos vs Arquivados e outros filtros)
   const filteredProjects = projects.filter(p => {
+    const isArchived = Boolean(p.arquivado);
+    if (showArchived !== isArchived) return false;
+
     const matchSearch = p.nome.toLowerCase().includes(searchQuery.toLowerCase()) || 
                        p.responsavel.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchStatus = statusFilter === 'All' || p.status === statusFilter;
+    const matchStatus = statusFilter === 'Todos' || p.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
@@ -286,7 +304,7 @@ export default function App() {
       setPinInput('');
       setPinError('');
     } else {
-      setPinError('Incorrect code. Please try again.');
+      setPinError('Código incorreto. Tente novamente.');
     }
   };
 
@@ -297,8 +315,8 @@ export default function App() {
           <div className="flex items-center gap-3">
             <LayoutDashboard className="w-8 h-8 text-indigo-200" />
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Educational Content Dashboard</h1>
-              <p className="text-indigo-200 text-sm">Course Production Management</p>
+              <h1 className="text-2xl font-bold tracking-tight">Painel de Conteúdo Educacional</h1>
+              <p className="text-indigo-200 text-sm">Gerenciamento de Produção de Cursos Livres</p>
             </div>
           </div>
           
@@ -313,12 +331,12 @@ export default function App() {
             {isAdmin ? (
               <>
                 <Unlock className="w-4 h-4" />
-                Editing Mode Active
+                Modo Edição Ativo
               </>
             ) : (
               <>
                 <Lock className="w-4 h-4" />
-                Unlock Editing
+                Desbloquear Edição
               </>
             )}
           </button>
@@ -327,14 +345,14 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         
-        {/* Summary Cards */}
+        {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4">
             <div className="p-3 bg-indigo-100 rounded-lg text-indigo-600">
               <BookOpen className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Total Projects</p>
+              <p className="text-sm font-medium text-slate-500">Projetos Ativos</p>
               <p className="text-2xl font-bold text-slate-800">{totalProjects}</p>
             </div>
           </div>
@@ -344,7 +362,7 @@ export default function App() {
               <Clock className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">In Production</p>
+              <p className="text-sm font-medium text-slate-500">Em Produção</p>
               <p className="text-2xl font-bold text-slate-800">{inProgressProjects}</p>
             </div>
           </div>
@@ -354,7 +372,7 @@ export default function App() {
               <CheckCircle className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Completed</p>
+              <p className="text-sm font-medium text-slate-500">Concluídos</p>
               <p className="text-2xl font-bold text-slate-800">{publishedProjects}</p>
             </div>
           </div>
@@ -362,13 +380,13 @@ export default function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Left Column: Form */}
+          {/* Coluna da Esquerda: Formulário */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden h-full">
               <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
                 <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                   <Plus className="w-5 h-5 text-indigo-500" />
-                  New Content
+                  Novo Conteúdo
                 </h2>
               </div>
               
@@ -377,21 +395,21 @@ export default function App() {
                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-400">
                     <Lock className="w-8 h-8" />
                   </div>
-                  <h3 className="text-lg font-medium text-slate-700 mb-2">View Only</h3>
+                  <h3 className="text-lg font-medium text-slate-700 mb-2">Apenas Visualização</h3>
                   <p className="text-sm text-slate-500 mb-6">
-                    The dashboard is restricted. To add or modify projects, you must enter the access code.
+                    O painel está em modo restrito. Para adicionar ou alterar projetos, é necessário inserir o código de acesso.
                   </p>
                   <button
                     onClick={() => setShowPinModal(true)}
                     className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
                   >
-                    Enter Code
+                    Inserir Código
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Content Name</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Nome do Conteúdo</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <BookOpen className="h-4 w-4 text-slate-400" />
@@ -401,7 +419,7 @@ export default function App() {
                         name="nome"
                         value={formData.nome}
                         onChange={handleChange}
-                        placeholder="Ex: Photography Course"
+                        placeholder="Ex: Curso de Fotografia"
                         className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         required
                       />
@@ -409,7 +427,7 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Content Type</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Conteúdo</label>
                     <select
                       name="tipoConteudo"
                       value={formData.tipoConteudo}
@@ -423,7 +441,7 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Duration</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Carga Horária</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Clock className="h-4 w-4 text-slate-400" />
@@ -441,7 +459,7 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Current Status</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Status Atual</label>
                     <select
                       name="status"
                       value={formData.status}
@@ -455,7 +473,7 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Current Assignee</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Responsável Atual</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <User className="h-4 w-4 text-slate-400" />
@@ -465,7 +483,7 @@ export default function App() {
                         name="responsavel"
                         value={formData.responsavel}
                         onChange={handleChange}
-                        placeholder="Assignee name"
+                        placeholder="Nome do responsável"
                         className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         required
                       />
@@ -473,7 +491,7 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Deadline</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Previsão de Entrega</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Calendar className="h-4 w-4 text-slate-400" />
@@ -489,7 +507,7 @@ export default function App() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Comments</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Comentários</label>
                     <div className="relative">
                       <div className="absolute top-3 left-3 pointer-events-none">
                         <MessageCircle className="h-4 w-4 text-slate-400" />
@@ -499,7 +517,7 @@ export default function App() {
                         value={formData.comentarios}
                         onChange={handleChange}
                         rows={3}
-                        placeholder="Project observations..."
+                        placeholder="Observações sobre o projeto..."
                         className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm resize-none"
                       />
                     </div>
@@ -509,20 +527,36 @@ export default function App() {
                     type="submit"
                     className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
                   >
-                    Add Project
+                    Adicionar Projeto
                   </button>
                 </form>
               )}
             </div>
           </div>
 
-          {/* Right Column: Project List */}
+          {/* Coluna da Direita: Lista de Projetos */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="bg-slate-50 border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h2 className="text-lg font-semibold text-slate-800">Content in Production</h2>
                 
-                {/* Search and Filters */}
+                {/* Abas para alternar Ativos/Arquivados */}
+                <div className="flex items-center bg-slate-200/50 p-1 rounded-lg">
+                  <button 
+                    onClick={() => setShowArchived(false)}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${!showArchived ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    Ativos
+                  </button>
+                  <button 
+                    onClick={() => setShowArchived(true)}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${showArchived ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    Arquivados
+                  </button>
+                </div>
+                
+                {/* Busca e Filtros */}
                 <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -530,7 +564,7 @@ export default function App() {
                     </div>
                     <input
                       type="text"
-                      placeholder="Search content..."
+                      placeholder="Buscar conteúdo..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className="block w-full sm:w-64 pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500"
@@ -545,7 +579,7 @@ export default function App() {
                       onChange={(e) => setStatusFilter(e.target.value)}
                       className="block w-full pl-9 pr-8 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500 appearance-none bg-white cursor-pointer"
                     >
-                      <option value="All">All Statuses</option>
+                      <option value="Todos">Todos os Status</option>
                       {STATUS_OPTIONS.map(s => (
                         <option key={s.value} value={s.value}>{s.label}</option>
                       ))}
@@ -558,41 +592,48 @@ export default function App() {
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-slate-50">
                     <tr>
-                      {isAdmin && !isFiltering && <th scope="col" className="px-2 py-3 w-8"></th>}
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Content</th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status & Progress</th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Assignee & Deadline</th>
+                      {isAdmin && !isFiltering && !showArchived && <th scope="col" className="px-2 py-3 w-8"></th>}
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Conteúdo</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status & Progresso</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Responsável & Prazo</th>
                       {isAdmin && (
-                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                        <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Ações</th>
                       )}
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-slate-200">
                     {loading ? (
                       <tr>
-                        <td colSpan={isAdmin && !isFiltering ? "5" : "4"} className="px-6 py-12 text-center text-slate-500 flex flex-col items-center justify-center">
+                        <td colSpan={isAdmin && !isFiltering && !showArchived ? "5" : "4"} className="px-6 py-12 text-center text-slate-500 flex flex-col items-center justify-center">
                           <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                          Loading dashboard...
+                          Carregando painel...
                         </td>
                       </tr>
                     ) : firebaseError ? (
                       <tr>
-                        <td colSpan={isAdmin && !isFiltering ? "5" : "4"} className="px-6 py-12">
+                        <td colSpan={isAdmin && !isFiltering && !showArchived ? "5" : "4"} className="px-6 py-12">
                           <div className="flex flex-col items-center justify-center text-center">
                             <div className="bg-red-50 p-6 rounded-xl border border-red-200 max-w-lg">
                               <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-                              <h3 className="text-lg font-bold text-red-800 mb-2">Firebase Connection Error</h3>
+                              <h3 className="text-lg font-bold text-red-800 mb-2">Erro de Ligação ao Firebase</h3>
                               <p className="text-sm text-red-600 mb-4 bg-red-100 p-2 rounded font-mono">{firebaseError}</p>
+                              <div className="text-sm text-red-700 text-left bg-white/50 p-4 rounded-lg">
+                                <p className="font-semibold mb-2">Como corrigir este erro no código:</p>
+                                <ol className="list-decimal pl-4 space-y-2">
+                                  <li>Certifique-se de que substituiu as palavras <b>"SUA_API_KEY_AQUI"</b>, etc., pelas chaves verdadeiras do seu projeto Firebase.</li>
+                                  <li>Verifique se ativou a <b>Autenticação Anônima</b> na secção <i>Authentication</i> do Firebase Console.</li>
+                                </ol>
+                              </div>
                             </div>
                           </div>
                         </td>
                       </tr>
                     ) : filteredProjects.length === 0 ? (
                       <tr>
-                        <td colSpan={isAdmin && !isFiltering ? "5" : "4"} className="px-6 py-12 text-center text-slate-500">
+                        <td colSpan={isAdmin && !isFiltering && !showArchived ? "5" : "4"} className="px-6 py-12 text-center text-slate-500">
                           {projects.length === 0 
-                            ? "No projects registered yet. Use the form to start!" 
-                            : "No projects found for this search."}
+                            ? "Nenhum projeto cadastrado ainda. Use o formulário ao lado para começar!" 
+                            : (showArchived ? "Nenhum projeto arquivado." : "Nenhum projeto encontrado para esta busca.")}
                         </td>
                       </tr>
                     ) : (
@@ -600,22 +641,28 @@ export default function App() {
                         <tr 
                           key={project.id} 
                           className={`hover:bg-slate-50 transition-all ${draggedItemIndex === index ? 'opacity-50 bg-slate-100' : ''} ${dragOverItemIndex === index ? 'border-t-2 border-indigo-500' : ''}`}
-                          draggable={isAdmin && !isFiltering}
+                          draggable={isAdmin && !isFiltering && !showArchived}
                           onDragStart={(e) => {
+                            if (showArchived) return;
                             setDraggedItemIndex(index);
                             e.dataTransfer.effectAllowed = "move";
                           }}
                           onDragEnter={(e) => {
-                            if (draggedItemIndex !== null) setDragOverItemIndex(index);
+                            if (showArchived || draggedItemIndex === null) return;
+                            setDragOverItemIndex(index);
                           }}
-                          onDragOver={(e) => e.preventDefault()}
+                          onDragOver={(e) => {
+                            if (!showArchived) e.preventDefault();
+                          }}
                           onDragEnd={() => {
                             setDraggedItemIndex(null);
                             setDragOverItemIndex(null);
                           }}
-                          onDrop={(e) => handleDrop(e, index)}
+                          onDrop={(e) => {
+                            if (!showArchived) handleDrop(e, index);
+                          }}
                         >
-                          {isAdmin && !isFiltering && (
+                          {isAdmin && !isFiltering && !showArchived && (
                             <td className="px-2 py-4 whitespace-nowrap cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-600">
                               <GripVertical className="w-5 h-5" />
                             </td>
@@ -626,10 +673,10 @@ export default function App() {
                               <div className="flex items-center gap-3 mt-1">
                                 {isAdmin ? (
                                   <select
-                                    value={project.tipoConteudo || 'Course'}
+                                    value={project.tipoConteudo || 'Curso'}
                                     onChange={(e) => handleUpdateProject(project.id, 'tipoConteudo', e.target.value)}
                                     className="text-[10px] uppercase font-bold tracking-wider bg-indigo-50 text-indigo-700 rounded px-1.5 py-0.5 border border-indigo-100 cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                    title="Change content type"
+                                    title="Alterar tipo de conteúdo"
                                   >
                                     {CONTENT_TYPES.map(tipo => (
                                       <option key={tipo} value={tipo}>{tipo}</option>
@@ -637,7 +684,7 @@ export default function App() {
                                   </select>
                                 ) : (
                                   <span className="text-[10px] uppercase font-bold tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100 rounded px-1.5 py-0.5">
-                                    {project.tipoConteudo || 'Course'}
+                                    {project.tipoConteudo || 'Curso'}
                                   </span>
                                 )}
                                 <div className="flex items-center text-xs text-slate-500">
@@ -650,10 +697,10 @@ export default function App() {
                                   <textarea
                                     value={project.comentarios || ''}
                                     onChange={(e) => handleUpdateProject(project.id, 'comentarios', e.target.value)}
-                                    placeholder="Add/edit observations..."
+                                    placeholder="Adicionar/editar observações..."
                                     rows={2}
                                     className="text-sm text-slate-700 bg-white/50 p-2 rounded-md border border-dashed border-slate-300 hover:border-indigo-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full resize-y transition-all"
-                                    title="Click to edit observations"
+                                    title="Clique para editar as observações"
                                   />
                                 </div>
                               ) : (
@@ -673,7 +720,7 @@ export default function App() {
                                     value={project.status}
                                     onChange={(e) => handleUpdateProject(project.id, 'status', e.target.value)}
                                     className={`inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 transition-all ${getStatusColor(project.status)}`}
-                                    title="Click to change status"
+                                    title="Clique para alterar o status"
                                   >
                                     {STATUS_OPTIONS.map(status => (
                                       <option key={status.value} value={status.value} className="bg-white text-slate-900 font-medium">
@@ -694,7 +741,7 @@ export default function App() {
                                 ></div>
                               </div>
                               <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                                {STATUS_PROGRESS[project.status] || 0}% Completed
+                                {STATUS_PROGRESS[project.status] || 0}% Concluído
                               </span>
                             </div>
                           </td>
@@ -711,11 +758,11 @@ export default function App() {
                                       value={project.responsavel}
                                       onChange={(e) => handleUpdateProject(project.id, 'responsavel', e.target.value)}
                                       className="text-sm font-medium text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:bg-slate-50 focus:outline-none w-full py-0.5 px-1 transition-all rounded-sm cursor-text"
-                                      placeholder="Set assignee"
-                                      title="Click to edit assignee"
+                                      placeholder="Definir responsável"
+                                      title="Clique para editar o responsável"
                                     />
                                   ) : (
-                                    <span className="text-sm font-medium text-slate-900 px-1">{project.responsavel || 'Unassigned'}</span>
+                                    <span className="text-sm font-medium text-slate-900 px-1">{project.responsavel || 'Sem responsável'}</span>
                                   )}
                                 </div>
                               </div>
@@ -727,23 +774,44 @@ export default function App() {
                                     value={project.dataEntrega || ''}
                                     onChange={(e) => handleUpdateProject(project.id, 'dataEntrega', e.target.value)}
                                     className="bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:bg-slate-50 focus:outline-none py-0.5 transition-all rounded-sm cursor-text text-xs text-slate-500"
-                                    title="Set deadline"
+                                    title="Definir prazo"
                                   />
                                 ) : (
-                                  <span>{project.dataEntrega ? project.dataEntrega.split('-').reverse().join('/') : 'No deadline'}</span>
+                                  <span>{project.dataEntrega ? project.dataEntrega.split('-').reverse().join('/') : 'Sem prazo'}</span>
                                 )}
                               </div>
                             </div>
                           </td>
                           {isAdmin && (
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button 
-                                onClick={() => handleDelete(project.id)}
-                                className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
-                                title="Delete project"
-                              >
-                                <Trash2 className="w-5 h-5" />
-                              </button>
+                              <div className="flex items-center justify-end gap-1">
+                                {showArchived ? (
+                                  <>
+                                    <button 
+                                      onClick={() => handleUpdateProject(project.id, 'arquivado', false)}
+                                      className="text-emerald-500 hover:text-emerald-700 p-2 hover:bg-emerald-50 rounded-full transition-colors"
+                                      title="Restaurar para Ativos"
+                                    >
+                                      <RotateCcw className="w-5 h-5" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDelete(project.id)}
+                                      className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-full transition-colors"
+                                      title="Excluir Permanentemente"
+                                    >
+                                      <Trash2 className="w-5 h-5" />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button 
+                                    onClick={() => handleUpdateProject(project.id, 'arquivado', true)}
+                                    className="text-amber-500 hover:text-amber-700 p-2 hover:bg-amber-50 rounded-full transition-colors"
+                                    title="Arquivar projeto"
+                                  >
+                                    <Archive className="w-5 h-5" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           )}
                         </tr>
@@ -758,7 +826,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* PIN Modal */}
+      {/* Modal de PIN */}
       {showPinModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden transform transition-all">
@@ -766,9 +834,9 @@ export default function App() {
               <div className="flex items-center justify-center w-12 h-12 bg-indigo-100 rounded-full mx-auto mb-4">
                 <Key className="w-6 h-6 text-indigo-600" />
               </div>
-              <h3 className="text-xl font-bold text-center text-slate-900 mb-2">Unlock Editing</h3>
+              <h3 className="text-xl font-bold text-center text-slate-900 mb-2">Desbloquear Edição</h3>
               <p className="text-sm text-center text-slate-500 mb-6">
-                Enter the access code to manage contents.
+                Insira o código de acesso para gerir os conteúdos.
               </p>
               
               <form onSubmit={handleUnlock}>
@@ -777,7 +845,7 @@ export default function App() {
                   autoFocus
                   value={pinInput}
                   onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="Access code..."
+                  placeholder="Código de acesso..."
                   className="block w-full px-4 py-3 border border-slate-300 rounded-lg text-center text-lg tracking-widest focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
                 />
                 
@@ -795,13 +863,13 @@ export default function App() {
                     }}
                     className="flex-1 px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
                   >
-                    Cancel
+                    Cancelar
                   </button>
                   <button
                     type="submit"
                     className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
                   >
-                    Unlock
+                    Desbloquear
                   </button>
                 </div>
               </form>
