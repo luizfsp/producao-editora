@@ -123,13 +123,12 @@ export default function App() {
         ...doc.data()
       }));
       
-      // Ordena pelos projetos com base no campo 'ordem'. 
+      // Nova Ordenação Inteligente: Trata itens sem 'ordem' dando prioridade máxima 
+      // usando um número negativo gerado a partir do createdAt.
       projectsData.sort((a, b) => {
-        const orderA = typeof a.ordem === 'number' ? a.ordem : 0;
-        const orderB = typeof b.ordem === 'number' ? b.ordem : 0;
+        const orderA = typeof a.ordem === 'number' ? a.ordem : -(a.createdAt || 0);
+        const orderB = typeof b.ordem === 'number' ? b.ordem : -(b.createdAt || 0);
         
-        // Se ambos tiverem a mesma ordem (ex: itens antigos sem ordem definida),
-        // ordena pelos mais recentes primeiro como critério de desempate.
         if (orderA === orderB) {
           return (b.createdAt || 0) - (a.createdAt || 0);
         }
@@ -169,15 +168,15 @@ export default function App() {
     e.preventDefault();
     if (!formData.nome || !formData.cargaHoraria || !formData.responsavel || !user) return;
 
-    // Calcula a nova ordem para garantir que a nova tarefa vá para o TOPO da lista
+    // Busca o menor número de ordem atual e subtrai 100 para forçar o item para o topo
     const minOrder = projects.length > 0 
-      ? Math.min(...projects.map(p => typeof p.ordem === 'number' ? p.ordem : 0)) 
+      ? Math.min(...projects.map(p => typeof p.ordem === 'number' ? p.ordem : -(p.createdAt || 0))) 
       : 0;
 
     const newProject = {
       ...formData,
       createdAt: Date.now(),
-      ordem: minOrder - 1, // Um valor menor que o mínimo garante o topo
+      ordem: minOrder - 100, 
       arquivado: false
     };
 
@@ -227,7 +226,7 @@ export default function App() {
     }
   };
 
-  // --- Funções de Arrastar e Soltar (Drag and Drop) ---
+  // --- Nova Lógica de Arrastar e Soltar (Ordenação Fracionada) ---
   const handleDrop = async (e, targetIndex) => {
     e.preventDefault();
     // Não permite reordenar na visualização de arquivados
@@ -240,24 +239,41 @@ export default function App() {
     const newProjects = [...filteredProjects];
     const draggedItem = newProjects[draggedItemIndex];
 
-    // Reorganiza o array
+    // Reorganiza o array localmente para identificar os vizinhos
     newProjects.splice(draggedItemIndex, 1);
     newProjects.splice(targetIndex, 0, draggedItem);
 
-    // Atualiza o estado para refletir as mudanças instantaneamente
-    const updatedProjects = [...projects];
-    
-    // Gera as novas ordens sequenciais e limpas (0, 1, 2...)
-    newProjects.forEach((proj, idx) => {
-      const projectToUpdate = updatedProjects.find(p => p.id === proj.id);
-      if (projectToUpdate) {
-        projectToUpdate.ordem = idx;
-      }
-    });
+    // Calcula a nova ordem baseada nos itens vizinhos (em cima e embaixo)
+    let newOrdem;
+    if (newProjects.length === 1) {
+      newOrdem = 0;
+    } else if (targetIndex === 0) {
+      // Movido para o topo da lista
+      const nextItem = newProjects[1];
+      const nextOrdem = typeof nextItem.ordem === 'number' ? nextItem.ordem : -(nextItem.createdAt || 0);
+      newOrdem = nextOrdem - 100;
+    } else if (targetIndex === newProjects.length - 1) {
+      // Movido para o final da lista
+      const prevItem = newProjects[targetIndex - 1];
+      const prevOrdem = typeof prevItem.ordem === 'number' ? prevItem.ordem : -(prevItem.createdAt || 0);
+      newOrdem = prevOrdem + 100;
+    } else {
+      // Movido para o meio de dois itens
+      const prevItem = newProjects[targetIndex - 1];
+      const nextItem = newProjects[targetIndex + 1];
+      const prevOrdem = typeof prevItem.ordem === 'number' ? prevItem.ordem : -(prevItem.createdAt || 0);
+      const nextOrdem = typeof nextItem.ordem === 'number' ? nextItem.ordem : -(nextItem.createdAt || 0);
+      newOrdem = (prevOrdem + nextOrdem) / 2; // Ponto médio
+    }
+
+    // Atualiza a interface visualmente primeiro para não ter travamentos
+    const updatedProjects = projects.map(p => 
+      p.id === draggedItem.id ? { ...p, ordem: newOrdem } : p
+    );
     
     updatedProjects.sort((a, b) => {
-      const orderA = typeof a.ordem === 'number' ? a.ordem : 0;
-      const orderB = typeof b.ordem === 'number' ? b.ordem : 0;
+      const orderA = typeof a.ordem === 'number' ? a.ordem : -(a.createdAt || 0);
+      const orderB = typeof b.ordem === 'number' ? b.ordem : -(b.createdAt || 0);
       if (orderA === orderB) return (b.createdAt || 0) - (a.createdAt || 0);
       return orderA - orderB;
     });
@@ -266,17 +282,9 @@ export default function App() {
     setDraggedItemIndex(null);
     setDragOverItemIndex(null);
 
-    // Salva as atualizações em lote no Firebase
+    // Salva apenas 1 atualização no Firebase (MUITO mais rápido e seguro contra bugs)
     try {
-      const updatePromises = newProjects.map((proj, idx) => {
-        // Só dispara a atualização se a ordem realmente mudou para este item
-        const originalProj = projects.find(p => p.id === proj.id);
-        if (originalProj && originalProj.ordem !== idx) {
-          return updateDoc(doc(db, 'projetos', proj.id), { ordem: idx });
-        }
-        return Promise.resolve();
-      });
-      await Promise.all(updatePromises);
+      await updateDoc(doc(db, 'projetos', draggedItem.id), { ordem: newOrdem });
     } catch (error) {
       console.error("Erro ao salvar nova ordem:", error);
     }
