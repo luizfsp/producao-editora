@@ -124,10 +124,15 @@ export default function App() {
       }));
       
       // Ordena pelos projetos com base no campo 'ordem'. 
-      // Se não existir, usa a data de criação como fallback.
       projectsData.sort((a, b) => {
-        const orderA = a.ordem !== undefined ? a.ordem : a.createdAt;
-        const orderB = b.ordem !== undefined ? b.ordem : b.createdAt;
+        const orderA = typeof a.ordem === 'number' ? a.ordem : 0;
+        const orderB = typeof b.ordem === 'number' ? b.ordem : 0;
+        
+        // Se ambos tiverem a mesma ordem (ex: itens antigos sem ordem definida),
+        // ordena pelos mais recentes primeiro como critério de desempate.
+        if (orderA === orderB) {
+          return (b.createdAt || 0) - (a.createdAt || 0);
+        }
         return orderA - orderB;
       });
       
@@ -164,15 +169,15 @@ export default function App() {
     e.preventDefault();
     if (!formData.nome || !formData.cargaHoraria || !formData.responsavel || !user) return;
 
-    // Calcula a nova ordem para ficar no final da lista
-    const newOrder = projects.length > 0 
-      ? Math.max(...projects.map(p => p.ordem !== undefined ? p.ordem : 0)) + 1 
+    // Calcula a nova ordem para garantir que a nova tarefa vá para o TOPO da lista
+    const minOrder = projects.length > 0 
+      ? Math.min(...projects.map(p => typeof p.ordem === 'number' ? p.ordem : 0)) 
       : 0;
 
     const newProject = {
       ...formData,
       createdAt: Date.now(),
-      ordem: newOrder,
+      ordem: minOrder - 1, // Um valor menor que o mínimo garante o topo
       arquivado: false
     };
 
@@ -242,7 +247,7 @@ export default function App() {
     // Atualiza o estado para refletir as mudanças instantaneamente
     const updatedProjects = [...projects];
     
-    // Gera as novas ordens
+    // Gera as novas ordens sequenciais e limpas (0, 1, 2...)
     newProjects.forEach((proj, idx) => {
       const projectToUpdate = updatedProjects.find(p => p.id === proj.id);
       if (projectToUpdate) {
@@ -250,7 +255,13 @@ export default function App() {
       }
     });
     
-    updatedProjects.sort((a, b) => a.ordem - b.ordem);
+    updatedProjects.sort((a, b) => {
+      const orderA = typeof a.ordem === 'number' ? a.ordem : 0;
+      const orderB = typeof b.ordem === 'number' ? b.ordem : 0;
+      if (orderA === orderB) return (b.createdAt || 0) - (a.createdAt || 0);
+      return orderA - orderB;
+    });
+
     setProjects(updatedProjects);
     setDraggedItemIndex(null);
     setDragOverItemIndex(null);
